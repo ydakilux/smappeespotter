@@ -114,10 +114,23 @@ export function WeatherOverlay({ activeLayer, showWeatherClick }: WeatherOverlay
     <>
       {activeLayer === 'radar' && <RainViewerLayer />}
 
-      {activeLayer && activeLayer !== 'radar' && owmKey && owmKey.length > 0 && (
+      {activeLayer && activeLayer !== 'radar' && activeLayer !== 'fwi' && owmKey && owmKey.length > 0 && (
         <TileLayer
           key={activeLayer}
           url={`https://tile.openweathermap.org/map/${activeLayer}/{z}/{x}/{y}.png?appid=${owmKey}`}
+          opacity={0.6}
+          updateWhenIdle={true}
+          updateWhenZooming={false}
+          maxNativeZoom={18}
+          zIndex={10}
+          attribution='Weather &copy; <a href="https://openweathermap.org">OpenWeatherMap</a>'
+        />
+      )}
+
+      {activeLayer === 'fwi' && owmKey && owmKey.length > 0 && (
+        <TileLayer
+          key="fwi"
+          url={`https://maps.openweathermap.org/maps/2.0/fwi/{z}/{x}/{y}?appid=${owmKey}`}
           opacity={0.6}
           updateWhenIdle={true}
           updateWhenZooming={false}

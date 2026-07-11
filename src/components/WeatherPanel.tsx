@@ -7,6 +7,7 @@ export type WeatherLayer =
   | 'pressure_new'
   | 'precipitation_new'
   | 'radar'
+  | 'fwi'
   | null
 
 interface LayerOption {
@@ -23,6 +24,7 @@ const LAYER_OPTIONS: LayerOption[] = [
   { layer: 'pressure_new',      emoji: '🔵', label: 'Pressure' },
   { layer: 'precipitation_new', emoji: '🌧️', label: 'Rain' },
   { layer: 'radar',             emoji: '📡', label: 'Radar' },
+  { layer: 'fwi',               emoji: '🔥', label: 'Fire Risk' },
 ]
 
 // Color legends per layer — OWM uses fixed palettes
@@ -98,6 +100,17 @@ const LEGENDS: Record<string, { label: string; stops: { color: string; value: st
       { color: '#ffff00cc', value: 'Heavy' },
       { color: '#ff4400ee', value: 'Intense' },
       { color: '#cc0000ff', value: 'Extreme' },
+    ],
+  },
+  fwi: {
+    label: 'Fire Weather Index (FWI)',
+    stops: [
+      { color: '#22c55e', value: 'Very Low (< 5.2)' },
+      { color: '#eab308', value: 'Low (5.2 – 11.2)' },
+      { color: '#f97316', value: 'Moderate (11.2 – 21.3)' },
+      { color: '#ef4444', value: 'High (21.3 – 38.0)' },
+      { color: '#b91c1c', value: 'Very High (38.0 – 50.0)' },
+      { color: '#7f1d1d', value: 'Extreme (≥ 50.0)' },
     ],
   },
 }
