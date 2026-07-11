@@ -48,6 +48,7 @@ interface WeatherClickHandlerProps {
 
 function WeatherClickHandler({ enabled }: WeatherClickHandlerProps) {
   const [weatherData, setWeatherData] = useState<PointWeather | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [popupPos, setPopupPos] = useState<[number, number] | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -57,13 +58,15 @@ function WeatherClickHandler({ enabled }: WeatherClickHandlerProps) {
       const { lat, lng } = e.latlng
       setPopupPos([lat, lng])
       setWeatherData(null)
+      setError(null)
       setLoading(true)
       fetchPointWeather(lat, lng)
         .then(data => {
           setWeatherData(data)
           setLoading(false)
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          setError(err instanceof Error ? err.message : 'An unknown error occurred')
           setLoading(false)
         })
     },
@@ -74,7 +77,7 @@ function WeatherClickHandler({ enabled }: WeatherClickHandlerProps) {
   return (
     <Popup
       position={popupPos}
-      eventHandlers={{ remove: () => { setPopupPos(null); setWeatherData(null) } }}
+      eventHandlers={{ remove: () => { setPopupPos(null); setWeatherData(null); setError(null) } }}
     >
       <div className="weather-popup">
         {loading && <div>Loading…</div>}
@@ -86,7 +89,12 @@ function WeatherClickHandler({ enabled }: WeatherClickHandlerProps) {
             <div>🌧️ {weatherData.precipitation} mm</div>
           </>
         )}
-        {!loading && !weatherData && <div>Could not load weather data.</div>}
+        {!loading && error && (
+          <div className="weather-popup-error" style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
+            ⚠️ {error}
+          </div>
+        )}
+        {!loading && !weatherData && !error && <div>Could not load weather data.</div>}
       </div>
     </Popup>
   )

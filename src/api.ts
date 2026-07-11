@@ -162,7 +162,14 @@ export async function fetchPointWeather(lat: number, lon: number): Promise<Point
     `&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,precipitation` +
     `&wind_speed_unit=kmh&temperature_unit=celsius`
   const res = await fetch(url)
-  if (!res.ok) throw new Error('Weather fetch failed')
+  if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error('Weather API rate limit reached (HTTP 429). Please try again in a few seconds.')
+    }
+    const errData = await res.json().catch(() => null) as { reason?: string; message?: string; error?: boolean } | null
+    const reason = errData?.reason || errData?.message || `HTTP ${res.status}`
+    throw new Error(`Weather load failed: ${reason}`)
+  }
   const data = await res.json() as {
     current: {
       temperature_2m: number
