@@ -2,32 +2,54 @@
 
 A React + TypeScript + Vite frontend with a Node/Express backend. It displays Smappee EV chargers on a Leaflet map and lets users drop custom pins stored in a local SQLite database.
 
+## Architecture
 
-Currently, two official plugins are available:
+The project is structured into two separate layers, each with its own TypeScript configuration boundary:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Layer | Root | TypeScript Config | Runtime |
+|---|---|---|---|
+| **Frontend** | `src/` | `tsconfig.app.json` | Browser (Vite dev server on port `5173`) |
+| **Backend** | `server/` | `server/tsconfig.json` | Node.js (via `tsx` on port `3001`) |
 
-## React Compiler
+- **API Proxy**: The Vite dev server proxies all `/api/*` requests to `http://localhost:3001` (configured in `vite.config.ts`).
+- **Database**: Local SQLite database stored at `server/pins.db`. It is automatically initialized and migrated on the first backend run.
+- **Caching**: Smappee charger data is cached in-memory for 10 minutes, and requests are throttled (200ms delay per location) to prevent rate limits.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## Getting Started
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+### 1. Install Dependencies
+Run the installation in the root folder to install all frontend and backend dependencies:
+```sh
+npm install
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 2. Environment Configuration
+Copy the template `.env.example` file to `.env`:
+```sh
+copy .env.example .env
+```
+Open `.env` and fill in the required keys:
+- `SMAPPEE_CLIENT_ID` / `SMAPPEE_CLIENT_SECRET`: Smappee API credentials (used only on the backend).
+- `VITE_OWM_API_KEY`: OpenWeatherMap API Key (used on the frontend for weather map layers).
+
+---
+
+## Available Commands
+
+Use the following scripts to run, lint, or build the application:
+
+```sh
+npm run start        # Runs both the server (port 3001) and frontend (port 5173) concurrently
+npm run server       # Starts the Express backend only
+npm run dev          # Starts the Vite development server for the frontend only
+npm run build        # Type-checks both configurations (tsc -b) and compiles Vite production assets
+npm run lint         # Runs the Oxlint linter
+```
+
+### Makefile Aliases
+If you have `make` installed (e.g. GNU Make via Scoop on Windows), you can run aliases mapping to the npm scripts:
+- `make start` -> `npm run start`
+- `make clean` -> Cleans workspace output directories (runs a PowerShell script safe for Windows)
+- `make help` -> Displays all available make targets
