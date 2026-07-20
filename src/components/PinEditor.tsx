@@ -42,7 +42,7 @@ export function PinEditor({
   useEffect(() => {
     const trimmed = addressInput.trim()
     // Don't search if it matches the already-selected address
-    if (!trimmed || trimmed === selectedAddress) {
+    if (!trimmed || trimmed === selectedAddress || trimmed.length < 3) {
       setAddressResults([])
       return
     }
@@ -56,7 +56,7 @@ export function PinEditor({
       } finally {
         setAddressLoading(false)
       }
-    }, 300)
+    }, 1000)
     return () => clearTimeout(timer)
   }, [addressInput, selectedAddress])
 

@@ -1,11 +1,25 @@
-export interface SmappeeCharger {
-  serviceLocationId: number
+export interface PublicChargerEquipment {
+  type: string;
+  powerKw: number | null;
+  currentType: string | null;
+  status: string | null;
+  count: number;
+}
+
+export interface PublicCharger {
+  id: string | number
   name: string
   lat: number
   lon: number
-  serialNumber: string | null
+  operatorName: string
   capacityKw: number | null
-  liveWatts: number | null
+  address: string
+  town?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+  connectionsCount: number
+  equipmentDetails?: PublicChargerEquipment[];
 }
 
 export interface Category {

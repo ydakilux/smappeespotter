@@ -1,4 +1,4 @@
-# SmappeeSpotter
+# WattMap
 
 A React + TypeScript + Vite frontend with a Node/Express backend. It displays Smappee EV chargers on a Leaflet map and lets users drop custom pins stored in a local SQLite database.
 
@@ -32,7 +32,7 @@ copy .env.example .env
 ```
 Open `.env` and fill in the required keys:
 - `SMAPPEE_CLIENT_ID` / `SMAPPEE_CLIENT_SECRET`: Smappee API credentials (used only on the backend).
-- `VITE_OWM_API_KEY`: OpenWeatherMap API Key (used on the frontend for weather map layers).
+- `VITE_OPENWEATHERMAP_API_KEY`: OpenWeatherMap API Key (used on the frontend for weather map layers).
 
 ---
 

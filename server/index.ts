@@ -2,88 +2,92 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import db from './db.js';
-import {
-  loginSmappee,
-  fetchChargers,
-  clearTokenStore,
-  type SmappeeCharger,
-} from './smappee.js';
-import * as smappee from './smappee.js';
-
+import { fetchChargers, fetchOperators } from './ocm.js';
+import { fetchIrveChargers, fetchIrveOperators } from './irve.js';
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
-// Auth routes
+// Open Charge Map routes
 // ---------------------------------------------------------------------------
 
-app.post('/api/auth/login', async (req: Request, res: Response) => {
-  const { username, password } = req.body as {
-    username?: string;
-    password?: string;
-  };
-
-  if (!username || !password) {
-    res.status(400).json({ error: 'Missing required fields: username, password' });
+app.get('/api/operators', async (req: Request, res: Response) => {
+  const apiKey = process.env.OPENCHARGEMAP_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: 'OPENCHARGEMAP_API_KEY not configured' });
     return;
   }
-
-  const clientId = process.env.SMAPPEE_CLIENT_ID;
-  const clientSecret = process.env.SMAPPEE_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    res.status(500).json({ error: 'SMAPPEE_CLIENT_ID / SMAPPEE_CLIENT_SECRET not set in .env' });
-    return;
-  }
-
   try {
-    await loginSmappee(clientId, clientSecret, username, password);
-    res.json({ ok: true });
+    const operators = await fetchOperators(apiKey);
+    res.json(operators);
   } catch (err) {
-    res.status(401).json({ error: (err as Error).message });
+    res.status(500).json({ error: (err as Error).message });
   }
 });
-
-app.post('/api/auth/logout', (_req: Request, res: Response) => {
-  clearTokenStore();
-  res.json({ ok: true });
-});
-
-app.get('/api/auth/status', (_req: Request, res: Response) => {
-  res.json({ loggedIn: smappee.tokenStore !== null });
-});
-
-// ---------------------------------------------------------------------------
-// Chargers route
-// ---------------------------------------------------------------------------
 
 app.get('/api/chargers', async (req: Request, res: Response) => {
-  if (!smappee.tokenStore) {
-    res.status(401).json({ error: 'Not authenticated' });
+  const apiKey = process.env.OPENCHARGEMAP_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: 'OPENCHARGEMAP_API_KEY not configured' });
     return;
   }
 
-  const clientId = process.env.SMAPPEE_CLIENT_ID;
-  const clientSecret = process.env.SMAPPEE_CLIENT_SECRET;
+  const minLat = parseFloat(req.query.minLat as string);
+  const minLng = parseFloat(req.query.minLng as string);
+  const maxLat = parseFloat(req.query.maxLat as string);
+  const maxLng = parseFloat(req.query.maxLng as string);
 
-  if (!clientId || !clientSecret) {
-    res.status(500).json({ error: 'SMAPPEE_CLIENT_ID / SMAPPEE_CLIENT_SECRET not configured' });
+  if (isNaN(minLat) || isNaN(minLng) || isNaN(maxLat) || isNaN(maxLng)) {
+    res.status(400).json({ error: 'Missing or invalid bounding box parameters' });
     return;
   }
 
+  const operatorIdsStr = req.query.operatorIds as string;
+  const operatorIds = operatorIdsStr ? operatorIdsStr.split(',').map(s => parseInt(s, 10)).filter(n => !isNaN(n)) : undefined;
   const minKw = parseFloat((req.query.minKw as string) ?? '0') || 0;
   const maxKw = parseFloat((req.query.maxKw as string) ?? '999') || 999;
 
   try {
-    const chargers = await fetchChargers(clientId, clientSecret);
+    const chargers = await fetchChargers(apiKey, minLat, minLng, maxLat, maxLng, operatorIds, minKw, maxKw);
+    res.json(chargers);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
 
-    const filtered = chargers.filter((c: SmappeeCharger) => {
-      if (c.capacityKw === null) return true; // unknown — always include
-      return c.capacityKw >= minKw && c.capacityKw <= maxKw;
-    });
+// ---------------------------------------------------------------------------
+// IRVE Data.gouv routes
+// ---------------------------------------------------------------------------
 
-    res.json(filtered);
+app.get('/api/irve/operators', async (req: Request, res: Response) => {
+  try {
+    const operators = await fetchIrveOperators();
+    res.json(operators);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.get('/api/irve/chargers', async (req: Request, res: Response) => {
+  const minLat = parseFloat(req.query.minLat as string);
+  const minLng = parseFloat(req.query.minLng as string);
+  const maxLat = parseFloat(req.query.maxLat as string);
+  const maxLng = parseFloat(req.query.maxLng as string);
+
+  if (isNaN(minLat) || isNaN(minLng) || isNaN(maxLat) || isNaN(maxLng)) {
+    res.status(400).json({ error: 'Missing or invalid bounding box parameters' });
+    return;
+  }
+
+  const operatorIdsStr = req.query.operatorIds as string;
+  const operatorIds = operatorIdsStr ? operatorIdsStr.split(',').filter(Boolean) : undefined;
+  const minKw = parseFloat((req.query.minKw as string) ?? '0') || 0;
+  const maxKw = parseFloat((req.query.maxKw as string) ?? '999') || 999;
+
+  try {
+    const chargers = await fetchIrveChargers(minLat, minLng, maxLat, maxLng, operatorIds, minKw, maxKw);
+    res.json(chargers);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
@@ -277,6 +281,166 @@ app.delete('/api/pins/:id', (req: Request<{ id: string }>, res: Response) => {
     return;
   }
   res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// Proxy route for Météo France WMS
+// ---------------------------------------------------------------------------
+
+let cachedMfToken = '';
+let mfTokenExpiresAt = 0;
+
+async function getMeteoFranceToken(): Promise<string> {
+  // Try to use legacy static token if present, otherwise fetch dynamically
+  const staticToken = process.env.VITE_METEO_FRANCE_TOKEN;
+  if (staticToken && !process.env.METEO_FRANCE_APP_ID) {
+    return staticToken;
+  }
+
+  const appId = process.env.METEO_FRANCE_APP_ID;
+  if (!appId) {
+    throw new Error('METEO_FRANCE_APP_ID is not configured');
+  }
+
+  const now = Date.now();
+  if (cachedMfToken && now < mfTokenExpiresAt) {
+    return cachedMfToken;
+  }
+
+  console.log('[WMS Proxy] Fetching new Météo-France token...');
+  const res = await fetch('https://portail-api.meteofrance.fr/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${appId}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: 'grant_type=client_credentials'
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Failed to get Météo-France token: ${res.status} - ${errText}`);
+  }
+
+  const data = await res.json() as any;
+  cachedMfToken = data.access_token;
+  // Refresh token 1 minute before expiration
+  mfTokenExpiresAt = now + ((data.expires_in - 60) * 1000);
+  
+  return cachedMfToken;
+}
+
+app.get('/api/meteofrance-wms', async (req: Request, res: Response) => {
+  let mfToken = '';
+  try {
+    // If API Key is provided, we skip OAuth token fetching completely
+    if (!process.env.METEO_FRANCE_API_KEY) {
+      mfToken = await getMeteoFranceToken();
+    }
+  } catch (err) {
+    res.status(500).send((err as Error).message);
+    return;
+  }
+
+  // Météo France REST path for GetMap
+  const targetUrl = new URL('https://public-api.meteofrance.fr/public/arome/1.0/wms/MF-NWP-HIGHRES-AROME-001-FRANCE-WMS/GetMap');
+  
+  let reqWidth = 512;
+  let reqHeight = 512;
+  let bboxArr: number[] = [];
+  let isWms130 = false;
+
+  for (const [key, value] of Object.entries(req.query)) {
+    const valStr = String(value);
+    const keyLower = key.toLowerCase();
+    
+    if (keyLower === 'width') reqWidth = parseInt(valStr, 10);
+    else if (keyLower === 'height') reqHeight = parseInt(valStr, 10);
+    else if (keyLower === 'bbox') bboxArr = valStr.split(',').map(Number);
+    else if (keyLower === 'version' && valStr === '1.3.0') isWms130 = true;
+    
+    targetUrl.searchParams.append(key, valStr);
+  }
+
+  // WMS aspect ratio fix:
+  // Météo-France adds transparent padding if the requested width/height don't match the BBOX aspect ratio.
+  // By adjusting the height sent to Météo-France, we force them to return a non-padded image.
+  // The browser will then stretch it back to a square (which perfectly simulates Web Mercator projection).
+  if (bboxArr.length === 4) {
+    // For WMS 1.3.0 with EPSG:4326, bbox is minY, minX, maxY, maxX (lat, lon)
+    const minY = bboxArr[0];
+    const minX = bboxArr[1];
+    const maxY = bboxArr[2];
+    const maxX = bboxArr[3];
+    
+    const widthDeg = maxX - minX;
+    const heightDeg = maxY - minY;
+    
+    if (widthDeg > 0 && heightDeg > 0) {
+      const ar = widthDeg / heightDeg;
+      const optimizedHeight = Math.round(reqWidth / ar);
+      targetUrl.searchParams.set('height', String(optimizedHeight));
+      
+      // We must ALSO adjust the BBOX so its aspect ratio exactly matches reqWidth/optimizedHeight.
+      // Otherwise, MapServer will still add 1 pixel of transparent padding due to float rounding differences.
+      const exactHeightDeg = widthDeg * (optimizedHeight / reqWidth);
+      const newMaxY = minY + exactHeightDeg;
+      targetUrl.searchParams.set('bbox', `${minY},${minX},${newMaxY},${maxX}`);
+    }
+  }
+
+  console.log(`[WMS Proxy] Requesting BBOX: ${bboxArr.join(',')} -> W:${reqWidth} H:${targetUrl.searchParams.get('height')}`);
+
+  try {
+    let fetchRes;
+    let retries = 3;
+    let delay = 300;
+
+    while (retries > 0) {
+      console.log(`[WMS Proxy] Fetching from Météo-France (Attempt ${4 - retries}/3)...`);
+      
+      const headers: Record<string, string> = {};
+      if (process.env.METEO_FRANCE_API_KEY) {
+        headers['apikey'] = process.env.METEO_FRANCE_API_KEY;
+      } else {
+        headers['Authorization'] = `Bearer ${mfToken}`;
+      }
+
+      fetchRes = await fetch(targetUrl.toString(), { headers });
+
+      console.log(`[WMS Proxy] Météo-France returned status: ${fetchRes.status}`);
+
+      if (fetchRes.status === 429) {
+        retries--;
+        if (retries === 0) {
+          console.log(`[WMS Proxy] Max retries reached for 429. Giving up.`);
+          break;
+        }
+        console.log(`[WMS Proxy] Rate limited (429). Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 2; // Exponential backoff
+        continue;
+      }
+      break;
+    }
+
+    if (!fetchRes || !fetchRes.ok) {
+      const errText = fetchRes ? await fetchRes.text() : 'Failed';
+      console.error(`[WMS Proxy] Error from Météo-France: ${fetchRes?.status} - ${errText.substring(0, 200)}`);
+      res.status(fetchRes?.status || 500).send(errText);
+      return;
+    }
+
+    const arrayBuffer = await fetchRes.arrayBuffer();
+    console.log(`[WMS Proxy] Success! Sending ${arrayBuffer.byteLength} bytes to browser.`);
+    res.status(fetchRes.status);
+    res.set('Content-Type', fetchRes.headers.get('Content-Type') || 'image/png');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(Buffer.from(arrayBuffer));
+  } catch (err) {
+    console.error(`[WMS Proxy] Internal Exception:`, err);
+    res.status(500).send((err as Error).message);
+  }
 });
 
 // ---------------------------------------------------------------------------

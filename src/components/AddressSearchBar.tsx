@@ -12,7 +12,7 @@ export function AddressSearchBar({ onSelect }: AddressSearchBarProps) {
 
   useEffect(() => {
     const trimmed = query.trim()
-    if (!trimmed) {
+    if (!trimmed || trimmed.length < 3) {
       setResults([])
       return
     }
@@ -26,7 +26,7 @@ export function AddressSearchBar({ onSelect }: AddressSearchBarProps) {
       } finally {
         setLoading(false)
       }
-    }, 300)
+    }, 1000)
     return () => clearTimeout(timer)
   }, [query])
 

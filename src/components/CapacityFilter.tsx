@@ -7,6 +7,21 @@ interface CapacityFilterProps {
   onShowUnknownChange: (v: boolean) => void
 }
 
+const COMMON_KW_VALUES = [0, 3, 7, 11, 22, 43, 50, 100, 150, 200, 250, 300, 350];
+
+function getClosestIndex(val: number) {
+  let closestIdx = 0;
+  let minDiff = Infinity;
+  for (let i = 0; i < COMMON_KW_VALUES.length; i++) {
+    const diff = Math.abs(COMMON_KW_VALUES[i] - val);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestIdx = i;
+    }
+  }
+  return closestIdx;
+}
+
 export function CapacityFilter({
   minKw,
   maxKw,
@@ -15,9 +30,12 @@ export function CapacityFilter({
   onMaxChange,
   onShowUnknownChange,
 }: CapacityFilterProps) {
+  const minIdx = getClosestIndex(minKw);
+  const maxIdx = getClosestIndex(maxKw);
+
   return (
     <div className="capacity-filter">
-      <h3>Capacity Filter</h3>
+      <h3 style={{ marginBottom: '8px' }}>Capacity Filter</h3>
       <p className="filter-range">
         Showing: <strong>{minKw} kW – {maxKw} kW</strong>
       </p>
@@ -27,12 +45,12 @@ export function CapacityFilter({
         <input
           type="range"
           min={0}
-          max={350}
-          step={0.5}
-          value={minKw}
+          max={COMMON_KW_VALUES.length - 1}
+          step={1}
+          value={minIdx}
           onChange={e => {
-            const v = parseFloat(e.target.value)
-            if (v <= maxKw) onMinChange(v)
+            const idx = parseInt(e.target.value, 10)
+            if (idx <= maxIdx) onMinChange(COMMON_KW_VALUES[idx])
           }}
           className="slider"
         />
@@ -43,12 +61,12 @@ export function CapacityFilter({
         <input
           type="range"
           min={0}
-          max={350}
-          step={0.5}
-          value={maxKw}
+          max={COMMON_KW_VALUES.length - 1}
+          step={1}
+          value={maxIdx}
           onChange={e => {
-            const v = parseFloat(e.target.value)
-            if (v >= minKw) onMaxChange(v)
+            const idx = parseInt(e.target.value, 10)
+            if (idx >= minIdx) onMaxChange(COMMON_KW_VALUES[idx])
           }}
           className="slider"
         />

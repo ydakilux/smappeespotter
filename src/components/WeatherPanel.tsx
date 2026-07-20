@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export type WeatherLayer =
   | 'clouds_new'
@@ -8,6 +8,7 @@ export type WeatherLayer =
   | 'precipitation_new'
   | 'radar'
   | 'fwi'
+  | 'arome_temp'
   | null
 
 interface LayerOption {
@@ -25,6 +26,7 @@ const LAYER_OPTIONS: LayerOption[] = [
   { layer: 'precipitation_new', emoji: '🌧️', label: 'Rain' },
   { layer: 'radar',             emoji: '📡', label: 'Radar' },
   { layer: 'fwi',               emoji: '🔥', label: 'Fire Risk' },
+  { layer: 'arome_temp',        emoji: '🇫🇷', label: 'MF Temp' },
 ]
 
 // Color legends per layer — OWM uses fixed palettes
@@ -96,20 +98,18 @@ const LEGENDS: Record<string, { label: string; stops: { color: string; value: st
     label: 'Precipitation (radar)',
     stops: [
       { color: '#00aaff44', value: 'Light' },
-      { color: '#00ff00aa', value: 'Moderate' },
-      { color: '#ffff00cc', value: 'Heavy' },
-      { color: '#ff4400ee', value: 'Intense' },
-      { color: '#cc0000ff', value: 'Extreme' },
+      { color: '#0000ffcc', value: 'Moderate' },
+      { color: '#ff0000ff', value: 'Heavy' },
+      { color: '#ff00ffff', value: 'Extreme' },
     ],
   },
   fwi: {
-    label: 'Fire Weather Index (FWI)',
+    label: 'Fire Weather Index',
     stops: [
-      { color: '#22c55e', value: 'Very Low (< 5.2)' },
-      { color: '#eab308', value: 'Low (5.2 – 11.2)' },
-      { color: '#f97316', value: 'Moderate (11.2 – 21.3)' },
-      { color: '#ef4444', value: 'High (21.3 – 38.0)' },
-      { color: '#b91c1c', value: 'Very High (38.0 – 50.0)' },
+      { color: '#008000', value: 'Low (< 5.2)' },
+      { color: '#ffff00', value: 'Moderate (5.2 - 11.2)' },
+      { color: '#ffa500', value: 'High (11.2 - 21.3)' },
+      { color: '#ff0000', value: 'Very High (21.3 - 50.0)' },
       { color: '#7f1d1d', value: 'Extreme (≥ 50.0)' },
     ],
   },
@@ -119,7 +119,9 @@ interface WeatherPanelProps {
   activeLayer: WeatherLayer
   showWeatherClick: boolean
   onLayerChange: (layer: WeatherLayer) => void
-  onShowWeatherClickChange: (v: boolean) => void
+  onShowWeatherClickChange: (val: boolean) => void
+  showWeather: boolean
+  onShowWeatherChange: (val: boolean) => void
 }
 
 export function WeatherPanel({
@@ -127,21 +129,43 @@ export function WeatherPanel({
   showWeatherClick,
   onLayerChange,
   onShowWeatherClickChange,
+  showWeather,
+  onShowWeatherChange
 }: WeatherPanelProps) {
-  const [isOpen, setIsOpen] = useState(true)
-  const owmKey = (import.meta.env.VITE_OWM_API_KEY as string | undefined) ?? ''
+  const [isOpen, setIsOpen] = useState(() => {
+    const saved = localStorage.getItem('weatherPanelOpen');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('weatherPanelOpen', String(isOpen));
+  }, [isOpen]);
+
+  const owmKey = (import.meta.env.VITE_OPENWEATHERMAP_API_KEY as string | undefined) ?? ''
   const hasKey = owmKey.length > 0 && owmKey !== 'your_owm_api_key_here'
-  const legend = activeLayer ? LEGENDS[activeLayer] : null
+  
+  // Météo-France authentication is now handled securely in the backend
+
+  const legend = activeLayer && activeLayer !== 'arome_temp' ? LEGENDS[activeLayer] : null
 
   return (
     <div className="sidebar-section sidebar-section--collapsible">
-      <button
-        className="section-collapse-btn"
-        onClick={() => setIsOpen(o => !o)}
-      >
-        <span>🌤️ Weather</span>
-        <span className="collapse-arrow">{isOpen ? '▲' : '▼'}</span>
-      </button>
+      <div className="section-collapse-btn" style={{ cursor: 'default' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input 
+            type="checkbox" 
+            checked={showWeather} 
+            onChange={(e) => onShowWeatherChange(e.target.checked)} 
+          />
+          <span>🌤️ Weather</span>
+        </label>
+        <button 
+          onClick={() => setIsOpen(o => !o)} 
+          style={{ background: 'transparent', border: 'none', color: '#8888aa', cursor: 'pointer', padding: '0 8px' }}
+        >
+          <span className="collapse-arrow">{isOpen ? '▲' : '▼'}</span>
+        </button>
+      </div>
 
       {isOpen && (
         <>
@@ -150,7 +174,12 @@ export function WeatherPanel({
               <button
                 key={String(opt.layer)}
                 className={`btn weather-layer-btn ${activeLayer === opt.layer ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => onLayerChange(opt.layer)}
+                onClick={() => {
+                  onLayerChange(opt.layer)
+                  if (opt.layer !== null) {
+                    onShowWeatherChange(true)
+                  }
+                }}
               >
                 <span>{opt.emoji}</span>
                 <span>{opt.label}</span>
@@ -184,9 +213,10 @@ export function WeatherPanel({
             Click map for weather
           </label>
 
-          {!hasKey && (
-            <p className="weather-note">⚠️ OWM layers need a key in .env → VITE_OWM_API_KEY</p>
+          {!hasKey && activeLayer && activeLayer !== 'arome_temp' && activeLayer !== 'radar' && (
+            <p className="weather-note">⚠️ OWM layers need a key in .env → VITE_OPENWEATHERMAP_API_KEY</p>
           )}
+
         </>
       )}
     </div>

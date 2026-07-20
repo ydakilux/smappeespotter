@@ -76,13 +76,12 @@ export function CategoryManager({
 
   return (
     <div className="category-manager">
-      <div className="category-manager-header">
-        <h3>Categories</h3>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
         <button
           className="btn btn-secondary btn-sm"
           onClick={() => { setShowNew(s => !s); setNewError(null) }}
         >
-          {showNew ? 'Cancel' : '+ New'}
+          {showNew ? 'Cancel' : '+ New Category'}
         </button>
       </div>
 

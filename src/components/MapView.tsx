@@ -4,7 +4,7 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png'
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png'
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet'
-import type { SmappeeCharger, CustomPin, Category } from '../types'
+import type { PublicCharger, CustomPin, Category } from '../types'
 import { PinEditor } from './PinEditor'
 import { WeatherOverlay } from './WeatherOverlay'
 import type { WeatherLayer } from './WeatherPanel'
@@ -68,11 +68,25 @@ function FlyToLocation({ target }: { target: { lat: number; lng: number } | null
   return null
 }
 
+function BoundsHandler({ onBoundsChange }: { onBoundsChange: (bounds: L.LatLngBounds) => void }) {
+  const map = useMap()
+  useEffect(() => {
+    onBoundsChange(map.getBounds())
+  }, [map, onBoundsChange])
+
+  useMapEvents({
+    moveend() {
+      onBoundsChange(map.getBounds())
+    },
+    zoomend() {
+      onBoundsChange(map.getBounds())
+    }
+  })
+  return null
+}
+
 interface MapViewProps {
-  chargers: SmappeeCharger[]
-  minKw: number
-  maxKw: number
-  showUnknown: boolean
+  chargers: PublicCharger[]
   pins: CustomPin[]
   categories: Category[]
   hiddenCategories: Set<number>
@@ -83,13 +97,11 @@ interface MapViewProps {
   onMapClick: (lat: number, lng: number) => void
   onPinUpdate: (id: number, color: string, label: string, categoryId: number | null, address: string) => void
   onPinDelete: (id: number) => void
+  onBoundsChange: (bounds: L.LatLngBounds) => void
 }
 
 export function MapView({
   chargers,
-  minKw,
-  maxKw,
-  showUnknown,
   pins,
   categories,
   hiddenCategories,
@@ -100,13 +112,9 @@ export function MapView({
   onMapClick,
   onPinUpdate,
   onPinDelete,
+  onBoundsChange,
 }: MapViewProps) {
   const [editingPinId, setEditingPinId] = useState<number | null>(null)
-
-  const visibleChargers = chargers.filter(c => {
-    if (c.capacityKw === null) return showUnknown
-    return c.capacityKw >= minKw && c.capacityKw <= maxKw
-  })
 
   const visiblePins = pins.filter(pin => {
     if (pin.category_id !== null && hiddenCategories.has(pin.category_id)) return false
@@ -124,16 +132,60 @@ export function MapView({
         attribution="© OpenStreetMap contributors"
       />
       <MapClickHandler isAdding={isAdding} onMapClick={onMapClick} />
+      <BoundsHandler onBoundsChange={onBoundsChange} />
       <FlyToLocation target={flyTo ?? null} />
       <WeatherOverlay activeLayer={activeWeatherLayer} showWeatherClick={showWeatherClick} />
 
-      {visibleChargers.map(c => (
-        <Marker key={c.serviceLocationId} position={[c.lat, c.lon]} icon={chargerIcon}>
-          <Popup>
-            <strong>{c.name}</strong><br />
-            Capacity: {c.capacityKw !== null ? `${c.capacityKw} kW` : 'Unknown'}<br />
-            {c.serialNumber && <>Serial: {c.serialNumber}<br /></>}
-            {c.liveWatts !== null && <>Live: {c.liveWatts} W</>}
+      {chargers.map(c => (
+        <Marker key={c.id} position={[c.lat, c.lon]} icon={chargerIcon}>
+          <Popup maxWidth={350} minWidth={250}>
+            <div style={{ padding: '4px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <strong style={{ fontSize: '16px' }}>{c.name}</strong>
+                <div style={{ fontSize: '12px', color: '#666' }}>ID: {c.id}</div>
+                <div style={{ fontSize: '13px', marginTop: '4px' }}>
+                  {c.operatorName}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '12px', fontSize: '13px' }}>
+                <strong style={{ display: 'block', marginBottom: '4px', borderBottom: '1px solid #ddd' }}>Location Details</strong>
+                {c.address && <div>{c.address}</div>}
+                {c.town && <div>{c.town}</div>}
+                {c.state && <div>{c.state}</div>}
+                {c.postcode && <div>{c.postcode}</div>}
+                {c.country && <div>{c.country}</div>}
+                <div style={{ color: '#666', marginTop: '4px' }}>
+                  Lat/Long: {c.lat.toFixed(6)} , {c.lon.toFixed(6)}
+                </div>
+              </div>
+
+              <div style={{ fontSize: '13px' }}>
+                <strong style={{ display: 'block', marginBottom: '4px', borderBottom: '1px solid #ddd' }}>Equipment Details</strong>
+                <div>Stations/Bays: {c.connectionsCount}</div>
+                {c.equipmentDetails && c.equipmentDetails.length > 0 && (
+                  <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {c.equipmentDetails.map((eq, idx) => (
+                      <div key={idx} style={{ background: '#f8f9fa', padding: '6px', borderRadius: '4px' }}>
+                        <strong style={{ display: 'block' }}>{eq.type}</strong>
+                        {eq.powerKw && <span>{eq.powerKw} kW </span>}
+                        {eq.currentType && <span>({eq.currentType})</span>}
+                        {eq.status && (
+                          <div style={{ fontSize: '12px', marginTop: '2px', color: eq.status.includes('Operational') ? 'green' : '#666' }}>
+                            <span style={{ background: '#e0e0e0', padding: '1px 4px', borderRadius: '4px', marginRight: '4px', color: '#000' }}>{eq.count} x</span> {eq.status}
+                          </div>
+                        )}
+                        {!eq.status && (
+                          <div style={{ fontSize: '12px', marginTop: '2px', color: '#666' }}>
+                            <span style={{ background: '#e0e0e0', padding: '1px 4px', borderRadius: '4px', marginRight: '4px', color: '#000' }}>{eq.count} x</span> (Status Unknown)
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </Popup>
         </Marker>
       ))}

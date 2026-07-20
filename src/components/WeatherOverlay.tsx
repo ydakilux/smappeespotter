@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { TileLayer, Popup, useMapEvents } from 'react-leaflet'
+import L from 'leaflet'
+import { TileLayer, Popup, useMapEvents, WMSTileLayer } from 'react-leaflet'
 import type { WeatherLayer } from './WeatherPanel'
-import { fetchPointWeather, type PointWeather } from '../api'
+import { fetchPointWeather, reverseGeocode, type PointWeather } from '../api'
 
 // ── RainViewer radar layer ───────────────────────────────────
 
@@ -48,6 +49,7 @@ interface WeatherClickHandlerProps {
 
 function WeatherClickHandler({ enabled }: WeatherClickHandlerProps) {
   const [weatherData, setWeatherData] = useState<PointWeather | null>(null)
+  const [locationName, setLocationName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [popupPos, setPopupPos] = useState<[number, number] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -58,11 +60,17 @@ function WeatherClickHandler({ enabled }: WeatherClickHandlerProps) {
       const { lat, lng } = e.latlng
       setPopupPos([lat, lng])
       setWeatherData(null)
+      setLocationName(null)
       setError(null)
       setLoading(true)
-      fetchPointWeather(lat, lng)
-        .then(data => {
+      
+      Promise.all([
+        fetchPointWeather(lat, lng),
+        reverseGeocode(lat, lng).catch(() => '')
+      ])
+        .then(([data, loc]) => {
           setWeatherData(data)
+          setLocationName(loc)
           setLoading(false)
         })
         .catch((err: unknown) => {
@@ -77,12 +85,13 @@ function WeatherClickHandler({ enabled }: WeatherClickHandlerProps) {
   return (
     <Popup
       position={popupPos}
-      eventHandlers={{ remove: () => { setPopupPos(null); setWeatherData(null); setError(null) } }}
+      eventHandlers={{ remove: () => { setPopupPos(null); setWeatherData(null); setLocationName(null); setError(null) } }}
     >
       <div className="weather-popup">
         {loading && <div>Loading…</div>}
         {!loading && weatherData && (
           <>
+            {locationName && <div className="weather-popup-location" style={{ fontWeight: 'bold', borderBottom: '1px solid #eee', paddingBottom: '4px', marginBottom: '4px' }}>📍 {locationName}</div>}
             <div className="weather-popup-title">{weatherData.description}</div>
             <div>🌡️ {weatherData.temperature}°C</div>
             <div>💨 {weatherData.windSpeed} km/h ({weatherData.windDirection}°)</div>
@@ -108,13 +117,31 @@ interface WeatherOverlayProps {
 }
 
 export function WeatherOverlay({ activeLayer, showWeatherClick }: WeatherOverlayProps) {
-  const owmKey = import.meta.env.VITE_OWM_API_KEY as string | undefined
+  const owmKey = import.meta.env.VITE_OPENWEATHERMAP_API_KEY as string | undefined
 
   return (
     <>
       {activeLayer === 'radar' && <RainViewerLayer />}
 
-      {activeLayer && activeLayer !== 'radar' && activeLayer !== 'fwi' && owmKey && owmKey.length > 0 && (
+      {activeLayer === 'arome_temp' && (
+        <WMSTileLayer
+          key="arome_temp_512"
+          url={`/api/meteofrance-wms?v=2`}
+          layers="TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND"
+          format="image/png"
+          transparent={true}
+          opacity={0.6}
+          version="1.3.0"
+          crs={L.CRS.EPSG4326}
+          bounds={[[37.5, -12.0], [55.4, 16.0]]}
+          minZoom={5}
+          maxNativeZoom={11}
+          tileSize={512}
+          attribution='Weather data &copy; <a href="https://meteofrance.com">Météo-France</a>'
+        />
+      )}
+
+      {activeLayer && activeLayer !== 'radar' && activeLayer !== 'fwi' && activeLayer !== 'arome_temp' && owmKey && owmKey.length > 0 && (
         <TileLayer
           key={activeLayer}
           url={`https://tile.openweathermap.org/map/${activeLayer}/{z}/{x}/{y}.png?appid=${owmKey}`}

@@ -43,7 +43,7 @@ The Makefile works on Windows with GNU Make (e.g. via Scoop). Two Windows-specif
 Copy `.env.example` to `.env`. Required keys:
 
 - `SMAPPEE_CLIENT_ID` / `SMAPPEE_CLIENT_SECRET` — Smappee OAuth app credentials (backend only, never exposed to frontend)
-- `VITE_OWM_API_KEY` — Open Weather Map key (prefixed `VITE_` so Vite exposes it to the browser)
+- `VITE_OPENWEATHERMAP_API_KEY` — Open Weather Map key (prefixed `VITE_` so Vite exposes it to the browser)
 
 Backend loads `.env` via `import 'dotenv/config'` at the top of `server/index.ts`.
 
@@ -70,7 +70,7 @@ Uses **oxlint** (not ESLint). Config: `.oxlintrc.json`. Plugins: `react`, `types
 
 - `src/api.ts` is the single file for all HTTP calls (both to `/api/*` and external services)
 - External services called directly from the browser: Nominatim (geocoding, no key needed), Open-Meteo (weather, no key needed)
-- `VITE_OWM_API_KEY` is in `.env.example` but weather currently uses Open-Meteo — check `src/components/WeatherPanel.tsx` before assuming OWM is active
+- `VITE_OPENWEATHERMAP_API_KEY` is in `.env.example` but weather currently uses Open-Meteo — check `src/components/WeatherPanel.tsx` before assuming OWM is active
 - `src/types.ts` holds shared frontend types; `server/smappee.ts` exports `SmappeeCharger` for the backend equivalent
 - No test suite exists.
 

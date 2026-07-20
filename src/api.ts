@@ -1,4 +1,4 @@
-import type { SmappeeCharger, CustomPin, Category } from './types'
+import type { PublicCharger, CustomPin, Category } from './types'
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -8,29 +8,59 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export async function apiLogin(username: string, password: string): Promise<void> {
-  const res = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+export interface OcmOperator {
+  id: string | number;
+  name: string;
+}
+
+export async function apiGetOperators(): Promise<OcmOperator[]> {
+  const res = await fetch('/api/operators')
+  return handleResponse<OcmOperator[]>(res)
+}
+
+export async function apiGetChargers(
+  minLat: number, minLng: number, maxLat: number, maxLng: number,
+  operatorIds: (number | string)[],
+  minKw: number, maxKw: number
+): Promise<PublicCharger[]> {
+  const params = new URLSearchParams({
+    minLat: String(minLat),
+    minLng: String(minLng),
+    maxLat: String(maxLat),
+    maxLng: String(maxLng),
+    minKw: String(minKw),
+    maxKw: String(maxKw),
   })
-  await handleResponse<unknown>(res)
-}
-
-export async function apiLogout(): Promise<void> {
-  const res = await fetch('/api/auth/logout', { method: 'POST' })
-  await handleResponse<unknown>(res)
-}
-
-export async function apiAuthStatus(): Promise<{ loggedIn: boolean }> {
-  const res = await fetch('/api/auth/status')
-  return handleResponse<{ loggedIn: boolean }>(res)
-}
-
-export async function apiGetChargers(minKw: number, maxKw: number): Promise<SmappeeCharger[]> {
-  const params = new URLSearchParams({ minKw: String(minKw), maxKw: String(maxKw) })
+  if (operatorIds && operatorIds.length > 0) {
+    params.append('operatorIds', operatorIds.join(','))
+  }
   const res = await fetch(`/api/chargers?${params}`)
-  return handleResponse<SmappeeCharger[]>(res)
+  return handleResponse<PublicCharger[]>(res)
+}
+
+export async function apiGetIrveOperators(): Promise<OcmOperator[]> {
+  const res = await fetch('/api/irve/operators')
+  return handleResponse<OcmOperator[]>(res)
+}
+
+export async function apiGetIrveChargers(
+  minLat: number, minLng: number, maxLat: number, maxLng: number,
+  operatorIds: (string | number)[],
+  minKw: number, maxKw: number
+): Promise<PublicCharger[]> {
+  const params = new URLSearchParams({
+    minLat: String(minLat),
+    minLng: String(minLng),
+    maxLat: String(maxLat),
+    maxLng: String(maxLng),
+    minKw: String(minKw),
+    maxKw: String(maxKw),
+  })
+  if (operatorIds && operatorIds.length > 0) {
+    params.append('operatorIds', operatorIds.join(','))
+  }
+  const res = await fetch(`/api/irve/chargers?${params}`)
+  return handleResponse<PublicCharger[]>(res)
 }
 
 export async function apiGetPins(): Promise<CustomPin[]> {
@@ -121,18 +151,41 @@ export interface NominatimResult {
 }
 
 export async function geocodeAddress(query: string): Promise<NominatimResult[]> {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
-  const res = await fetch(url, { headers: { 'User-Agent': 'SmappeeSpotter/1.0' } })
+  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`
+  const res = await fetch(url)
   if (!res.ok) throw new Error('Geocoding failed')
-  return res.json() as Promise<NominatimResult[]>
+  const data = await res.json() as any
+  return (data.features || []).map((f: any, i: number) => {
+    const p = f.properties
+    const nameParts = [p.name, p.street, p.city, p.state, p.country].filter(Boolean)
+    const displayName = Array.from(new Set(nameParts)).join(', ')
+    return {
+      place_id: p.osm_id || i,
+      display_name: displayName,
+      lon: String(f.geometry.coordinates[0]),
+      lat: String(f.geometry.coordinates[1])
+    }
+  })
 }
 
 export async function reverseGeocode(lat: number, lon: number): Promise<string> {
-  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
-  const res = await fetch(url, { headers: { 'User-Agent': 'SmappeeSpotter/1.0' } })
+  const url = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`
+  const res = await fetch(url)
   if (!res.ok) return ''
-  const data = await res.json() as { display_name?: string }
-  return data.display_name ?? ''
+  
+  const data = await res.json() as any
+  if (data.features && data.features.length > 0) {
+    const p = data.features[0].properties
+    const city = p.city || p.town || p.village || p.municipality || p.county
+    if (city && p.country) {
+      return `${city}, ${p.country}`
+    } else if (city) {
+      return city
+    }
+    return p.name || ''
+  }
+  
+  return ''
 }
 
 // ── Weather (Open-Meteo, no key) ────────────────────────────
@@ -160,7 +213,7 @@ export async function fetchPointWeather(lat: number, lon: number): Promise<Point
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,precipitation` +
-    `&wind_speed_unit=kmh&temperature_unit=celsius`
+    `&wind_speed_unit=kmh&temperature_unit=celsius&models=meteofrance_seamless`
   const res = await fetch(url)
   if (!res.ok) {
     if (res.status === 429) {
