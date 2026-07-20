@@ -85,9 +85,17 @@ function BoundsHandler({ onBoundsChange }: { onBoundsChange: (bounds: L.LatLngBo
   return null
 }
 
+export interface TempPin {
+  id: string
+  lat: number
+  lng: number
+  label: string
+}
+
 interface MapViewProps {
   chargers: PublicCharger[]
   pins: CustomPin[]
+  tempPins?: TempPin[]
   categories: Category[]
   hiddenCategories: Set<number>
   isAdding: boolean
@@ -103,6 +111,7 @@ interface MapViewProps {
 export function MapView({
   chargers,
   pins,
+  tempPins = [],
   categories,
   hiddenCategories,
   isAdding,
@@ -247,6 +256,23 @@ export function MapView({
           </Marker>
         )
       })}
+
+      {tempPins.map(pin => (
+        <Marker
+          key={pin.id}
+          position={[pin.lat, pin.lng]}
+          icon={makeCircleIcon('#95a5a6', '⭐', 22)}
+        >
+          <Popup>
+            <div className="pin-popup">
+              <strong>{pin.label}</strong>
+              <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>
+                📍 Temporary Pin
+              </div>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
     </MapContainer>
   )
 }

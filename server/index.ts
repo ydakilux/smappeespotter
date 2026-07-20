@@ -4,9 +4,10 @@ import cors from 'cors';
 import db from './db.js';
 import { fetchChargers, fetchOperators } from './ocm.js';
 import { fetchIrveChargers, fetchIrveOperators } from './irve.js';
+import { extractLocationsFromText, getAvailableModels } from './gemini.js';
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // ---------------------------------------------------------------------------
 // Open Charge Map routes
@@ -179,6 +180,40 @@ app.delete('/api/categories/:id', (req: Request<{ id: string }>, res: Response) 
 });
 
 // ---------------------------------------------------------------------------
+// AI Extraction Routes
+// ---------------------------------------------------------------------------
+
+app.post('/api/extract-locations', async (req: Request, res: Response) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+    return;
+  }
+
+  const { text, model } = req.body as { text?: string; model?: string };
+  if (!text || typeof text !== 'string') {
+    res.status(400).json({ error: 'Missing or invalid text parameter' });
+    return;
+  }
+
+  try {
+    const locations = await extractLocationsFromText(text, model || 'gemini-3.5-flash');
+    res.json(locations);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.get('/api/models', async (req: Request, res: Response) => {
+  try {
+    const models = await getAvailableModels();
+    res.json(models);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Pins routes
 // ---------------------------------------------------------------------------
 
@@ -223,7 +258,12 @@ app.post('/api/pins', (req: Request, res: Response) => {
     'INSERT INTO pins (lat, lng, color, label, address, category_id) VALUES (?, ?, ?, ?, ?, ?)'
   );
   const info = stmt.run(lat, lng, color, label, typeof address === 'string' ? address : '', (category_id as number | null) ?? null);
-  const pin = db.prepare('SELECT * FROM pins WHERE id = ?').get(info.lastInsertRowid);
+  const pin = db.prepare(`
+    SELECT p.*, c.name as category_name, c.color as category_color, c.emoji as category_emoji
+    FROM pins p
+    LEFT JOIN categories c ON p.category_id = c.id
+    WHERE p.id = ?
+  `).get(info.lastInsertRowid);
   res.status(201).json(pin);
 });
 
@@ -269,7 +309,12 @@ app.put('/api/pins/:id', (req: Request<{ id: string }>, res: Response) => {
     db.prepare('UPDATE pins SET category_id = ? WHERE id = ?').run(category_id ?? null, id);
   }
 
-  const updated = db.prepare('SELECT * FROM pins WHERE id = ?').get(id);
+  const updated = db.prepare(`
+    SELECT p.*, c.name as category_name, c.color as category_color, c.emoji as category_emoji
+    FROM pins p
+    LEFT JOIN categories c ON p.category_id = c.id
+    WHERE p.id = ?
+  `).get(id);
   res.json(updated);
 });
 

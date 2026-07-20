@@ -12,6 +12,8 @@ import { AddressSearchBar } from './components/AddressSearchBar'
 import { WeatherPanel } from './components/WeatherPanel'
 import { ProviderFilter } from './components/ProviderFilter'
 import type { WeatherLayer } from './components/WeatherPanel'
+import { ImportLocationsPanel, type ValidatedLocation } from './components/ImportLocationsPanel'
+import type { TempPin } from './components/MapView'
 import { reverseGeocode } from './api'
 
 function App() {
@@ -70,6 +72,9 @@ function App() {
   const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null)
   const [activePinMenuId, setActivePinMenuId] = useState<number | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+  
+  const [tempPins, setTempPins] = useState<TempPin[]>([])
+  
   const [showChargers, setShowChargers] = useState(() => {
     const saved = localStorage.getItem('showChargers');
     return saved !== null ? saved === 'true' : true;
@@ -85,6 +90,10 @@ function App() {
   const [categoriesOpen, setCategoriesOpen] = useState(() => {
     const saved = localStorage.getItem('categoriesOpen');
     return saved !== null ? saved === 'true' : true;
+  });
+  const [aiImportOpen, setAiImportOpen] = useState(() => {
+    const saved = localStorage.getItem('aiImportOpen');
+    return saved !== null ? saved === 'true' : false;
   });
 
   useEffect(() => {
@@ -111,7 +120,8 @@ function App() {
     localStorage.setItem('showWeather', String(showWeather));
     localStorage.setItem('pinsOpen', String(pinsOpen));
     localStorage.setItem('categoriesOpen', String(categoriesOpen));
-  }, [minKw, maxKw, showUnknown, operatorIdsOcm, operatorIdsIrve, chargersOpen, showChargers, showWeather, pinsOpen, categoriesOpen]);
+    localStorage.setItem('aiImportOpen', String(aiImportOpen));
+  }, [minKw, maxKw, showUnknown, operatorIdsOcm, operatorIdsIrve, chargersOpen, showChargers, showWeather, pinsOpen, categoriesOpen, aiImportOpen]);
 
   const visibleCount = chargers.length
 
@@ -148,6 +158,13 @@ function App() {
     setFlyTo({ lat, lng })
   }
 
+  async function handleSaveAILocations(locations: ValidatedLocation[], categoryId: number | null = null) {
+    // Save to DB and refresh pins list
+    for (const loc of locations) {
+      await addPin(loc.lat, loc.lng, '#9b59b6', loc.label, categoryId, loc.originalName)
+    }
+  }
+
   return (
     <div className="app-layout">
       <header className="top-bar">
@@ -174,6 +191,7 @@ function App() {
           <MapView
             chargers={showChargers ? chargers : []}
             pins={pins}
+            tempPins={tempPins}
             categories={categories}
             hiddenCategories={hiddenCategories}
             isAdding={isAdding}
@@ -297,13 +315,33 @@ function App() {
                   onToggleVisibility={toggleCategory}
                   onAdd={addCategory}
                   onUpdate={updateCategory}
-                  onDelete={(id) => {
+                  onDelete={async (id) => {
                     if (window.confirm("Are you sure you want to delete this category? All pins in it will lose their category.")) {
-                      deleteCategory(id);
+                      await deleteCategory(id);
                     }
                   }}
                 />
               </div>
+            )}
+          </div>
+
+          {/* ── AI Import ── */}
+          <div className="sidebar-section sidebar-section--collapsible">
+            <button
+              className="section-collapse-btn"
+              onClick={() => setAiImportOpen(o => !o)}
+            >
+              <span>✨ AI Import</span>
+              <span className="collapse-arrow">{aiImportOpen ? '▲' : '▼'}</span>
+            </button>
+            {aiImportOpen && (
+              <ImportLocationsPanel
+                categories={categories}
+                onAddTempPins={setTempPins}
+                onClearTempPins={() => setTempPins([])}
+                onSavePins={handleSaveAILocations}
+                onFlyTo={(lat, lng) => setFlyTo({ lat, lng })}
+              />
             )}
           </div>
 

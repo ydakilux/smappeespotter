@@ -1,4 +1,4 @@
-import type { PublicCharger, CustomPin, Category } from './types'
+import type { PublicCharger, CustomPin, Category, ExtractedLocation } from './types'
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -6,6 +6,13 @@ async function handleResponse<T>(res: Response): Promise<T> {
     throw new Error(text || `HTTP ${res.status}`)
   }
   return res.json() as Promise<T>
+}
+
+export interface ExtractedLocation {
+  name: string
+  context?: string
+  lat?: number
+  lng?: number
 }
 
 export interface OcmOperator {
@@ -241,4 +248,22 @@ export async function fetchPointWeather(lat: number, lon: number): Promise<Point
     weatherCode: c.weather_code,
     description: WMO_CODES[c.weather_code] ?? `Code ${c.weather_code}`,
   }
+}
+
+// ---------------------------------------------------------------------------
+// AI Extraction
+// ---------------------------------------------------------------------------
+
+export async function apiExtractLocations(text: string, model: string = 'gemini-3.5-flash'): Promise<ExtractedLocation[]> {
+  const res = await fetch('/api/extract-locations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, model }),
+  });
+  return handleResponse<ExtractedLocation[]>(res);
+}
+
+export async function apiGetModels(): Promise<string[]> {
+  const res = await fetch('/api/models');
+  return handleResponse<string[]>(res);
 }

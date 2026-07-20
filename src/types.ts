@@ -44,3 +44,8 @@ export interface CustomPin {
   category_emoji: string | null
   created_at: string
 }
+
+export interface ExtractedLocation {
+  name: string;
+  context?: string;
+}
