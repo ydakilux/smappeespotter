@@ -172,6 +172,11 @@ export function MapView({
               <div style={{ fontSize: '13px' }}>
                 <strong style={{ display: 'block', marginBottom: '4px', borderBottom: '1px solid #ddd' }}>Equipment Details</strong>
                 <div>Stations/Bays: {c.connectionsCount}</div>
+                {c.capacityKw && (!c.equipmentDetails || c.equipmentDetails.length === 0) && (
+                  <div style={{ marginTop: '4px' }}>
+                    Max Power: <strong>{c.capacityKw} kW</strong>
+                  </div>
+                )}
                 {c.equipmentDetails && c.equipmentDetails.length > 0 && (
                   <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {c.equipmentDetails.map((eq, idx) => (
@@ -194,6 +199,21 @@ export function MapView({
                   </div>
                 )}
               </div>
+              
+              {c.rawData && (
+                <div style={{ marginTop: '12px', borderTop: '1px solid #ddd', paddingTop: '8px', textAlign: 'center' }}>
+                  <button 
+                    className="btn btn-secondary btn-sm" 
+                    onClick={() => {
+                      console.log('--- Raw Data for', c.name, '---');
+                      console.log(c.rawData);
+                      alert('Raw data has been logged to the browser console (press F12 to view).');
+                    }}
+                  >
+                    View Raw Data
+                  </button>
+                </div>
+              )}
             </div>
           </Popup>
         </Marker>

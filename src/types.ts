@@ -20,6 +20,7 @@ export interface PublicCharger {
   country?: string;
   connectionsCount: number
   equipmentDetails?: PublicChargerEquipment[];
+  rawData?: any;
 }
 
 export interface Category {

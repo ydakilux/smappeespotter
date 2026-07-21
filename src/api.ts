@@ -1,4 +1,4 @@
-import type { PublicCharger, CustomPin, Category, ExtractedLocation } from './types'
+import type { PublicCharger, CustomPin, Category } from './types'
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {

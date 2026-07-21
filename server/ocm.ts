@@ -88,7 +88,8 @@ export async function fetchChargers(
       postcode: poi.AddressInfo?.Postcode || undefined,
       country: poi.AddressInfo?.Country?.Title || undefined,
       connectionsCount: poi.NumberOfPoints || poi.Connections?.length || 0,
-      equipmentDetails: Array.from(equipmentMap.values())
+      equipmentDetails: Array.from(equipmentMap.values()),
+      rawData: { _source: 'OCM', ...poi }
     };
   }).filter(c => {
     if (maxKw !== undefined && maxKw < 999 && c.capacityKw !== null) {

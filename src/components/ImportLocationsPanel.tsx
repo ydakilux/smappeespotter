@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiExtractLocations, geocodeAddress, apiGetModels } from '../api'
-import type { Category } from '../api'
+import type { Category } from '../types'
 import type { TempPin } from './MapView'
 
 export interface ValidatedLocation extends TempPin {
